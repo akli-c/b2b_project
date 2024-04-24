@@ -35,7 +35,7 @@ function mapCatalogOrderToEkanOrder(orderData) {
           ville: orderData.billing_address.city,
           codePays: orderData.billing_address.country_code,
           telephoneFixe: orderData.billing_address.phone,
-          email: orderData.email, // Assuming the billing email is the order email
+          email: orderData.email, 
       },
       adresseLivraison: {
           societe: orderData.shipping_address.company_name || "",
@@ -47,7 +47,7 @@ function mapCatalogOrderToEkanOrder(orderData) {
           ville: orderData.shipping_address.city,
           codePays: orderData.shipping_address.country_code,
           telephoneFixe: orderData.shipping_address.phone,
-          email: orderData.email, // Assuming the shipping email is the order email
+          email: orderData.email, 
       },
       montantHT: orderData.items.reduce((total, item) => total + (item.unit_price * item.quantity), 0),
       montantAssure: orderData.items.reduce((total, item) => total + (item.unit_price * item.quantity), 0),

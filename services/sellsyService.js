@@ -19,6 +19,31 @@ const getSellsyAccessToken = async () => {
   }
 };
 
+async function handleWebhookOrder(webhookEvent) {
+    switch (webhookEvent.event) {
+      case 'order.placed':
+        // Log the event; no action required in Sellsy.
+        console.log('Order placed. Awaiting validation.');
+        break;
+      case 'order.completed':
+        // Create a draft order in Sellsy.
+        console.log('Order validated. Creating draft order in Sellsy.');
+        await createSellsyOrder(webhookEvent);
+        break;
+    //   case 'order.fulfillment_created':
+    //     // Update the order status in Sellsy to reflect preparation.
+    //     console.log('Order is being prepared. Update status in Sellsy if needed.');
+    //     await updateOrderStatusInSellsy(webhookEvent.order_id, 'preparation');
+    //     break;
+      case 'order.shipment_created':
+        // Finalize the order and create an invoice in Sellsy.
+        console.log('Order shipped. Finalizing order and creating invoice in Sellsy.');
+        await createSellsyInvoice(webhookEvent);
+        break;
+      default:
+        console.log('Received an unrecognized event type.');
+    }
+  }
 
 //mapping bon de commande 
 function mapCatalogOrderToSellsyOrder(orderData) {
@@ -588,13 +613,16 @@ async function createEntityInSellsy(company) {
             isMethod = "company"
         }
         if (response.data.status === 'success') {
-            const sellsyId = response.data.response.client_id;  
-            await updateCompanyInCatalog(company.id, company.name, sellsyId, );
+            
 
             if (isMethod === "prospect") {
+                const sellsyId = response.data.response;  
+                await updateCompanyInCatalog(company.id, company.name, sellsyId, );
                 console.log('Prospect created successfully with id:', response.data.response);
                 return response.data.response;
             } else {
+                const sellsyId = response.data.response.client_id;  
+                await updateCompanyInCatalog(company.id, company.name, sellsyId, );
                 console.log('Company created successfully with id:', response.data.response.client_id);
                 return response.data.response.client_id;
             }
@@ -900,6 +928,7 @@ module.exports = {
     getSellsyAccessToken,
     createSellsyOrder,
     createSellsyInvoice,
-    webhookHandler
+    webhookHandler,
+    handleWebhookOrder
 };
   

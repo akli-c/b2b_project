@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { getAllOrders, createOrUpdateOrder, updateCompanyInCatalog } = require('../services/catalogService');
-const { createSellsyOrder, createSellsyInvoice, webhookHandler } = require("../services/sellsyService");
+const { getAllOrders, createOrUpdateOrder } = require('../services/catalogService');
+const { handleWebhookOrder, webhookHandler } = require("../services/sellsyService");
 
 // get all orders
 router.get('/orders', async (req, res) => {
@@ -31,35 +31,21 @@ router.post('/orders', async (req, res) => {
 // Webhook
 router.post('/webhook', async (req, res) => {
   try {
-      const orderData = req.body;
-      console.log('Webhook received:', orderData);
+    const webhookData = req.body;
+    console.log('Webhook received:', webhookData);
 
-      // Create an order in Sellsy
-      const orderResponse = await createSellsyOrder(orderData);
-      if (orderResponse && orderResponse.id) {
-          console.log('Order created in Sellsy:', orderResponse);
+    // Call webhookHandler to process the received data
+    await handleWebhookOrder(webhookData);
 
-          // Extract order ID from the response
-          const orderId = orderResponse.id;
-
-          // Create an invoice in Sellsy linked to the created order
-          const invoiceResponse = await createSellsyInvoice(orderData, orderId);
-          console.log('Invoice created in Sellsy:', invoiceResponse);
-
-          res.status(200).json({
-              message: 'Order and invoice processed successfully',
-              orderId: orderId,
-              invoiceId: invoiceResponse.id // Adjust based on actual response structure
-          });
-      } else {
-          throw new Error('Order creation failed, no order ID received');
-      }
+    res.status(200).json({
+      message: 'Webhook data processed successfully'
+    });
   } catch (error) {
-      console.error('Error processing webhook:', error);
-      res.status(500).json({
-          error: 'Error handling webhook',
-          details: error.message
-      });
+    console.error('Error processing webhook:', error);
+    res.status(500).json({
+      error: 'Error handling webhook',
+      details: error.message
+    });
   }
 });
 
