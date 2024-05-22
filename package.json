@@ -6,6 +6,9 @@
     "start": "node --env-file=.env app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "engines": {
+    "node": ">=20.0.0 <lts"
+  },
   "author": "",
   "license": "ISC",
   "description": "",
