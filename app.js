@@ -12,8 +12,16 @@ app.get('/', (req, res) => {
   res.send('Hello, World!');
 });
 
+//PROD/DEV DISTINCT
+let url = ""
+if (process.env.NODE_ENV == "development") {
+  url = process.env.NGROK_URL
+} else if (process.env.NODE_ENV == "production") {
+  url = process.env.RENDER_URL
+}
+
 const registerWebhook = async () => {
-    const webhookUrl = `${process.env.NGROK_URL}/catalog/webhook`; 
+    const webhookUrl = `${url}/catalog/webhook`; 
     const apiKey = process.env.STARTCATALOG_API_KEY; 
     try {
       await catalogService.registerWebhook(webhookUrl, apiKey);
@@ -24,7 +32,7 @@ const registerWebhook = async () => {
 };
 
 const registerWebhookCompanies = async () => {
-  const webhookUrl = `${process.env.NGROK_URL}/catalog/companies`; 
+  const webhookUrl = `${url}/catalog/companies`; 
   const apiKey = process.env.STARTCATALOG_API_KEY; 
   try {
     await catalogService.registerWebhookCompanies(webhookUrl, apiKey);
@@ -52,5 +60,6 @@ app.listen(port, () => {
 });
 
 registerWebhook()
+registerWebhookCompanies()
 
-module.exports = app; // test
+module.exports = app; // dev
