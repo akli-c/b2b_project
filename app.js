@@ -21,6 +21,7 @@ if (process.env.NODE_ENV == "development") {
 }
 
 const registerWebhook = async () => {
+  console.log("url",url)
     const webhookUrl = `${url}/catalog/webhook`; 
     const apiKey = process.env.STARTCATALOG_API_KEY; 
     try {
