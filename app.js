@@ -8,6 +8,10 @@ const catalogRoutes = require('./routes/catalogRoutes');
 
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.send('Hello, World!');
+});
+
 const registerWebhook = async () => {
     const webhookUrl = `${process.env.NGROK_URL}/catalog/webhook`; 
     const apiKey = process.env.STARTCATALOG_API_KEY; 
