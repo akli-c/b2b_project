@@ -1,6 +1,7 @@
 const axios = require('axios').default;
 const { formatDate } = require('../helpers')
-const { updateCompanyInCatalog } = require('./catalogService')
+const { updateCompanyInCatalog, updateOrderInCatalog } = require('./catalogService')
+const { setUpdatingCompany, getUpdatingCompany, setUpdatingOrder, getUpdatingOrder } = require('../helpers');
 
 //Auth
 const getSellsyAccessToken = async () => {
@@ -30,16 +31,12 @@ async function handleWebhookOrder(webhookEvent) {
       case 'order.completed':
         // Create a draft order in Sellsy.
         console.log('Order validated. Creating bon de commande brouillon in Sellsy.');
-        await updateDeliveryStepInSellsy(test.id, 'picking'); 
-        break;
-      case 'order.fulfillment_created':
-        // Update the order status in Sellsy to reflect preparation.
-        console.log('Order is prepared');
-        // await updateDeliveryStepInSellsy(webhookEvent.order_id, 'preparation');
+        await updateDeliveryStepInSellsy(webhookEvent.seller_order_id, 'picking'); 
         break;
       case 'order.shipment_created':
         // Finalize the order and create an invoice in Sellsy.
         console.log('Order shipped. Finalizing order and creating invoice in Sellsy.');
+        await updateDeliveryStepInSellsy(webhookEvent.seller_order_id, 'sent'); 
         await createSellsyInvoice(webhookEvent);
         break;
       default:
@@ -127,11 +124,18 @@ const updateDeliveryStepInSellsy = async (orderId, newStep) => {
 
 //Bon de commande
 async function createSellsyOrder(orderData) {
+    if (getUpdatingOrder()) {
+        console.log('Ignoring order creation as an order update is in progress.');
+        return;
+    }
+
+
     const accessToken = await getSellsyAccessToken();
     const apiUrl = 'https://api.sellsy.com/v2/orders';
     const processedOrderData = mapCatalogOrderToSellsyOrder(orderData);
 
     try {
+        setUpdatingOrder(true); // Set the flag before the update
         const response = await axios.post(apiUrl, processedOrderData, {
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
@@ -139,10 +143,17 @@ async function createSellsyOrder(orderData) {
             },
         });
         console.log('Order created in Sellsy:', response.data);
-        return response.data; 
+        const sellsyOrderId = response.data.id;
+
+        // Update the order in catalog with the new Sellsy order ID
+        await updateOrderInCatalog(orderData.order_id, sellsyOrderId);
+
+        return response.data;
     } catch (error) {
         console.error('Error creating order in Sellsy:', error.response ? error.response.data : error.message);
         throw error;
+    } finally {
+        setUpdatingOrder(false); // Reset the flag after the update
     }
 }
 
@@ -421,42 +432,47 @@ function mapAddressDataToPayload(addressData, addressType) {
 
 
 async function webhookHandler(webhookData) {
+    if (getUpdatingCompany()) {
+      console.log('Ignoring webhook as a company update is in progress.');
+      return;
+    }
+  
     const { event, company } = parseWebhookData(webhookData);
     try {
-        if (event === 'company.created') {
-            console.log('Creating new company:', company.name);
-            const companyData = await createEntityInSellsy(company);
-            console.log('Company created with ID:', companyData);
-        } else if (event === 'company.updated') {
-            console.log('Updating company:', company.name);
-            const companyData = await findCompanyInSellsy(company.name);
-            if (!companyData) {
-                console.log('No existing company found to update:', company.name);
-                return;
-            }
-            
-            // Determine if type transformation is needed
-            const needsTransformToCustomer = company.catalog_names.includes("prospect") && companyData.type === 'client';
-            const needsTransformToProspect = !company.catalog_names.includes("prospect") && companyData.type === 'prospect';
-
-            if (needsTransformToCustomer) {
-                await transformClientToProspect(companyData.id);
-            } else if (needsTransformToProspect) {
-                await transformProspectToCustomer(companyData.id);
-            }
-
-            await updateEntityInSellsy(companyData.id, company);
-            console.log('Company updated with ID:', companyData.id);
-            await synchronizeContacts(companyData.id, companyData.type, company.contacts);
-
-
-            await handleAddresses(companyData.id, company.billing_address, company.shipping_addresses);
+      if (event === 'company.created') {
+        console.log('Creating new company:', company.name);
+        const companyData = await createEntityInSellsy(company);
+        console.log('Company created with ID:', companyData);
+      } else if (event === 'company.updated') {
+        console.log('Updating company:', company.name);
+        const companyData = await findCompanyInSellsy(company.name);
+        if (!companyData) {
+          console.log('No existing company found to update:', company.name);
+          return;
         }
+        
+        // Determine if type transformation is needed
+        const needsTransformToCustomer = company.catalog_names.includes("prospect") && companyData.type === 'client';
+        const needsTransformToProspect = !company.catalog_names.includes("prospect") && companyData.type === 'prospect';
+  
+        if (needsTransformToCustomer) {
+          await transformClientToProspect(companyData.id);
+        } else if (needsTransformToProspect) {
+          await transformProspectToCustomer(companyData.id);
+        }
+  
+        await updateEntityInSellsy(companyData.id, company);
+        console.log('Company updated with ID:', companyData.id);
+        await synchronizeContacts(companyData.id, companyData.type, company.contacts);
+  
+        await handleAddresses(companyData.id, company.billing_address, company.shipping_addresses);
+      }
     } catch (error) {
-        console.error('Error in webhookHandler:', error);
-        throw error; // Ensure you handle this in your route
+      console.error('Error in webhookHandler:', error);
+      throw error; // Ensure you handle this in your route
     }
-}
+  }
+  
 
 
 async function findCompanyInSellsy(companyName) {
@@ -654,12 +670,12 @@ async function createEntityInSellsy(company) {
 
             if (isMethod === "prospect") {
                 const sellsyId = response.data.response;  
-                await updateCompanyInCatalog(company.id, company.name, sellsyId, );
+                await updateCompanyInCatalog(company.id, sellsyId, );
                 console.log('Prospect created successfully with id:', response.data.response);
                 return response.data.response;
             } else {
                 const sellsyId = response.data.response.client_id;  
-                await updateCompanyInCatalog(company.id, company.name, sellsyId, );
+                await updateCompanyInCatalog(company.id, sellsyId, );
                 console.log('Company created successfully with id:', response.data.response.client_id);
                 return response.data.response.client_id;
             }

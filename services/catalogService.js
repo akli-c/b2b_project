@@ -1,4 +1,6 @@
 const axios = require('axios').default;
+const { setUpdatingCompany, getUpdatingCompany } = require('../helpers');
+
 
 const startCatalogApi = axios.create({
   baseURL: 'https://o91mts5a64.execute-api.eu-west-1.amazonaws.com/dev/', 
@@ -38,21 +40,44 @@ const getAllCompanies = async () => {
   return response.data.companies
 }
 
-
-async function updateCompanyInCatalog(companyId, companyName, sellsyClientId) {
-  const catalogApiUrl = `/catalog/companies`; 
-  const companies = [{
-      id : companyId,
-      name: companyName,
-      code: sellsyClientId.toString()
-  }]
+const updateOrderInCatalog = async (orderId, sellsyOrderId) => {
+  const catalogApiUrl = `/catalog/orders`;
+  const orders = [{
+    id: orderId,
+    seller_order_id: sellsyOrderId.toString(),
+  }];
 
   try {
+    const response = await startCatalogApi.post(catalogApiUrl, { 
+      orders 
+    });
+
+    console.log('Order updated in Catalog successfully:', orderId);
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.data) {
+      console.error('Error data:', error.response.data);
+    }
+    console.error('Error updating order in Catalog:', error.message);
+    throw error;
+  }
+};
+
+
+async function updateCompanyInCatalog(companyId, sellsyClientId) {
+  const catalogApiUrl = `/catalog/companies`; 
+  const companies = [{
+      id: companyId,
+      code: sellsyClientId.toString()
+  }];
+
+  try {
+    setUpdatingCompany(true); // Activer le drapeau de mise à jour
     const response = await startCatalogApi.post(catalogApiUrl, {
       companies
     });
 
-    console.log('Company updated in Catalog successfully:', response.data);
+    console.log('Company updated in Catalog successfully:', companyId);
     return response.data;
   } catch (error) {
     if (error.response && error.response.data) {
@@ -60,8 +85,12 @@ async function updateCompanyInCatalog(companyId, companyName, sellsyClientId) {
     }
     console.error('Error updating company in Catalog:', error.message);
     throw error;
+  } finally {
+    setUpdatingCompany(false); // Désactiver le drapeau de mise à jour
   }
 }
+
+
 
 
 module.exports = {
@@ -70,5 +99,6 @@ module.exports = {
   registerWebhook,
   registerWebhookCompanies,
   getAllCompanies,
-  updateCompanyInCatalog
+  updateCompanyInCatalog,
+  updateOrderInCatalog
 };
