@@ -26,7 +26,7 @@ const registerWebhook = async () => {
     const apiKey = process.env.STARTCATALOG_API_KEY; 
     try {
       await catalogService.registerWebhook(webhookUrl, apiKey);
-      console.log('Webhook for orders registered successfully');
+      console.log('Webhook for orders registered successfully', webhookUrl);
     } catch (error) {
       console.error('Failed to register webhook:', error);
     }
@@ -37,7 +37,7 @@ const registerWebhookCompanies = async () => {
   const apiKey = process.env.STARTCATALOG_API_KEY; 
   try {
     await catalogService.registerWebhookCompanies(webhookUrl, apiKey);
-    console.log('Webhook for companies registered successfully');
+    console.log('Webhook for companies registered successfully', webhookUrl);
   } catch (error) {
     console.error('Failed to register webhook:', error);
   }
@@ -48,17 +48,18 @@ const registerWebhookCompanies = async () => {
 //app.use('/ekan', ekanRoutes);
 app.use('/catalog', catalogRoutes);
 
-cron.schedule('21 11 * * *', () => {
-  console.log('Starting customer synchronization...');
-}, {
-  scheduled: true,
-  timezone: "Europe/Paris" 
-});
+// cron.schedule('21 11 * * *', () => {
+//   console.log('Starting customer synchronization...');
+// }, {
+//   scheduled: true,
+//   timezone: "Europe/Paris" 
+// });
 
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
+
 
 registerWebhook()
 registerWebhookCompanies()

@@ -24,17 +24,19 @@ async function handleWebhookOrder(webhookEvent) {
       case 'order.placed':
         // Log the event; no action required in Sellsy.
         console.log('Order placed. Awaiting validation.');
+        var test = await createSellsyOrder(webhookEvent);
+        await updateDeliveryStepInSellsy(test.id, 'wait'); 
         break;
       case 'order.completed':
         // Create a draft order in Sellsy.
-        console.log('Order validated. Creating draft order in Sellsy.');
-        await createSellsyOrder(webhookEvent);
+        console.log('Order validated. Creating bon de commande brouillon in Sellsy.');
+        await updateDeliveryStepInSellsy(test.id, 'picking'); 
         break;
-    //   case 'order.fulfillment_created':
-    //     // Update the order status in Sellsy to reflect preparation.
-    //     console.log('Order is being prepared. Update status in Sellsy if needed.');
-    //     await updateOrderStatusInSellsy(webhookEvent.order_id, 'preparation');
-    //     break;
+      case 'order.fulfillment_created':
+        // Update the order status in Sellsy to reflect preparation.
+        console.log('Order is prepared');
+        // await updateDeliveryStepInSellsy(webhookEvent.order_id, 'preparation');
+        break;
       case 'order.shipment_created':
         // Finalize the order and create an invoice in Sellsy.
         console.log('Order shipped. Finalizing order and creating invoice in Sellsy.');
@@ -87,6 +89,41 @@ function mapCatalogOrderToSellsyInvoice(orderData, orderId) {
     return sellsyInvoice;
 }
 
+//update status 
+const updateDeliveryStepInSellsy = async (orderId, newStep) => {
+    const accessToken = await getSellsyAccessToken();
+    const apiUrl = 'https://apifeed.sellsy.com/0/';
+    
+    const requestSettings = {
+      method: 'Document.updateDeliveryStep',
+      params: {
+        docid: orderId,
+        document: {
+          step: newStep,
+        }
+      }
+    };
+  
+    const params = new URLSearchParams();
+    params.append('io_mode', 'json');
+    params.append('do_in', JSON.stringify(requestSettings));
+  
+    try {
+      const response = await axios.post(apiUrl, params, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
+      console.log('Delivery step updated in Sellsy:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating delivery step in Sellsy:', error.response ? error.response.data : error.message);
+      throw error;
+    }
+  };
+
+  
 
 //Bon de commande
 async function createSellsyOrder(orderData) {
