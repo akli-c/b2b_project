@@ -7,9 +7,6 @@
     "serve": "node --env-file=.env app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "engines": {
-    "node": ">=20.0.0 <lts"
-  },
   "author": "",
   "license": "ISC",
   "description": "",
@@ -18,6 +15,8 @@
     "basic-auth": "^2.0.1",
     "dotenv": "^16.4.5",
     "express": "^4.18.2",
+    "joi": "^17.13.1",
+    "moment": "^2.30.1",
     "node-cron": "^3.0.3"
   }
 }

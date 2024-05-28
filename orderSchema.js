@@ -1,0 +1,82 @@
+const Joi = require('joi');
+
+const addressSchema = Joi.object({
+  societe: Joi.string().max(100).allow(''),
+  nom: Joi.string().max(50).required(),
+  prenom: Joi.string().max(50).allow(''),
+  adresse: Joi.string().max(128).required(),
+  adresse2: Joi.string().max(128).allow(''),
+  escalier: Joi.string().max(128).allow(''),
+  batiment: Joi.string().max(128).allow(''),
+  codePostal: Joi.string().max(10).required(),
+  ville: Joi.string().max(50).required(),
+  codePays: Joi.string().max(2).required(),
+  telephoneFixe: Joi.string().max(20).allow(''),
+  telephoneMobile: Joi.string().max(20).allow(''),
+  email: Joi.string().max(150).email().required(),
+});
+
+const articleSchema = Joi.object({
+  refEcommercant: Joi.string().max(35).required(),
+  nrSerie: Joi.string().max(64).allow(''),
+  dlc: Joi.date().iso().allow(''),
+  emballageCadeau: Joi.boolean().allow(false),
+  quantite: Joi.number().integer().min(1).required(),
+  remarque: Joi.string().allow(''),
+  messageCadeau: Joi.string().allow(''),
+  prixVenteUnitaire: Joi.number().precision(2).required(),
+  devisePrixVenteUnitaire: Joi.string().max(3).required(),
+});
+
+const orderSchema = Joi.object({
+  reference: Joi.string().required(),
+  referenceSecondaire: Joi.string().max(35).allow(''),
+  referenceClient: Joi.string().max(50).required(),
+  codeServiceTransporteur: Joi.number().integer().required(),
+  codeEntrepot: Joi.string().allow(''),
+  nomEntrepot: Joi.string().allow(''),
+  facture: Joi.object({
+    base64: Joi.string().allow(''),
+  }).allow(null),
+  document: Joi.object({
+    base64: Joi.string().allow(''),
+  }).allow(null),
+  formulaire: Joi.object({
+    base64: Joi.string().allow(''),
+  }).allow(null),
+  priorite: Joi.number().integer().allow(null),
+  dateCommande: Joi.date().iso().required(),
+  dateLivraison: Joi.date().iso().allow(''),
+  dateExpeditionSouhaitee: Joi.date().iso().allow(''),
+  numeroLogo: Joi.number().integer().required(),
+  bloquee: Joi.boolean().allow(false),
+  motifBlocage: Joi.string().allow(''),
+  etatPaiement: Joi.number().integer().allow(null),
+  codeTypePaiement: Joi.string().allow(''),
+  codeTypeClient: Joi.string().max(50).allow(''),
+  infoLivraison: Joi.string().max(65).allow(''),
+  messageCadeau: Joi.string().allow(''),
+  messageCommercial: Joi.string().allow(''),
+  commentaire: Joi.string().allow(''),
+  numeroDepot: Joi.string().allow(''),
+  montantHT: Joi.number().precision(2).allow(null),
+  montantAssure: Joi.number().precision(2).allow(null),
+  deviseMontantAssure: Joi.string().max(3).allow(''),
+  deviseMontantHT: Joi.string().max(3).allow(''),
+  incoterm: Joi.string().max(3).allow(''),
+  codeCategorieEnvoi: Joi.string().allow(''),
+  fraisDePort: Joi.number().precision(2).allow(null),
+  deviseFraisDePort: Joi.string().max(3).allow(''),
+  listeArticles: Joi.array().items(articleSchema).min(1).required(),
+  adresseFacturation: addressSchema.required(),
+  adresseLivraison: addressSchema,
+  overwriteAdresseLivraisonClient: Joi.boolean().allow(false),
+  numeroFacture: Joi.string().max(20).allow(''),
+  dateFacture: Joi.date().iso().allow(''),
+  codePlateforme: Joi.string().allow(''),
+  versionPlateforme: Joi.string().max(25).allow(''),
+  module: Joi.string().max(50).allow(''),
+  versionModule: Joi.string().max(25).allow(''),
+});
+
+module.exports = orderSchema;

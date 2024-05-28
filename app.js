@@ -3,7 +3,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 const catalogService = require('./services/catalogService');
 const cron = require('node-cron')
-// const ekanRoutes = require('./routes/ekanRoutes');
+const ekanRoutes = require('./routes/ekanRoutes');
 const catalogRoutes = require('./routes/catalogRoutes');
 
 app.use(express.json());
@@ -45,7 +45,7 @@ const registerWebhookCompanies = async () => {
 
 
 
-//app.use('/ekan', ekanRoutes);
+app.use('/ekan', ekanRoutes);
 app.use('/catalog', catalogRoutes);
 
 // cron.schedule('21 11 * * *', () => {
@@ -61,7 +61,7 @@ app.listen(port, () => {
 });
 
 
-registerWebhook()
-registerWebhookCompanies()
+// registerWebhook()
+// registerWebhookCompanies()
 
 module.exports = app; // dev

@@ -31,7 +31,7 @@ async function handleWebhookOrder(webhookEvent) {
       case 'order.completed':
         // Create a draft order in Sellsy.
         console.log('Order validated. Creating bon de commande brouillon in Sellsy.');
-        await updateDeliveryStepInSellsy(webhookEvent.seller_order_id, 'picking'); 
+        await updateDeliveryStepInSellsy(webhookEvent.seller_order_id, 'picking');
         break;
       case 'order.shipment_created':
         // Finalize the order and create an invoice in Sellsy.
