@@ -1,7 +1,7 @@
 const axios = require('axios').default;
 const moment = require('moment');
 const Joi = require('joi');
-const orderSchema = require('../orderSchema');  // Assurez-vous que le chemin est correct
+const orderSchema = require('../orderSchema');  
 
 const ekanCredentials = {
   username: process.env.EKAN_MERCHANT_NUMBER,
@@ -27,7 +27,7 @@ function mapCatalogOrderToEkanOrder(orderData) {
       refEcommercant: "TS1001", // change 
       quantite: item.quantity,
       prixVenteUnitaire: item.unit_price,
-      devisePrixVenteUnitaire: orderData.currency_code.toUpperCase(), // Mapping currency_code
+      devisePrixVenteUnitaire: orderData.currency_code.toUpperCase(), 
     })),
     adresseFacturation: {
       societe: orderData.billing_address.company_name || "",
@@ -37,7 +37,7 @@ function mapCatalogOrderToEkanOrder(orderData) {
       adresse2: orderData.billing_address.address_2 || "",
       codePostal: orderData.billing_address.postal_code,
       ville: orderData.billing_address.city,
-      codePays: orderData.billing_address.country_code.toUpperCase(), // Mapping country_code
+      codePays: orderData.billing_address.country_code.toUpperCase(), 
       telephoneFixe: orderData.billing_address.phone,
       email: orderData.email,
     },
@@ -69,7 +69,7 @@ const createOrder = async (orderData) => {
     throw new Error('Invalid order data');
   }
 
-  // Validation des données mappées
+  // validation des données 
   const { error } = orderSchema.validate(ekanOrderData);
   if (error) {
     console.error('Validation error:', error.details);

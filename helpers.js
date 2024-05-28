@@ -1,7 +1,7 @@
 //formattage date
 function formatDate(dateString) {
     const date = new Date(dateString);
-    return date.toISOString().split('T')[0]; // Convert to YYYY-MM-DD format
+    return date.toISOString().split('T')[0]; // convert to YYYY-MM-DD format
 }
 
 let isUpdatingCompany = false;
