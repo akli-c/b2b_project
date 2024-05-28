@@ -4,21 +4,39 @@ const { updateCompanyInCatalog, updateOrderInCatalog } = require('./catalogServi
 const { setUpdatingCompany, getUpdatingCompany, setUpdatingOrder, getUpdatingOrder } = require('../helpers');
 
 //Auth
+let sellsyAccessToken = null;
+let sellsyTokenExpiresAt = null;
+
 const getSellsyAccessToken = async () => {
-  try {
-    const response = await axios.post(`https://login.sellsy.com/oauth2/access-tokens`, {
-      grant_type: 'client_credentials',
-      client_id: process.env.SELLSY_CLIENT,
-      client_secret: process.env.SELLSY_SECRET
-    });
-    const accessToken = response.data.access_token;
-    console.log("got access token");
-    return accessToken;
-  } catch (error) {
-    console.error('Error obtaining access token:', error.response ? error.response.data : error.message);
-    throw error;
-  }
-};
+    const now = new Date();
+  
+    // check if the token is still valid
+    if (sellsyAccessToken && sellsyTokenExpiresAt && now < sellsyTokenExpiresAt) {
+      return sellsyAccessToken;
+    }
+  
+    // if not, get new token
+    try {
+      const response = await axios.post(`https://login.sellsy.com/oauth2/access-tokens`, {
+        grant_type: 'client_credentials',
+        client_id: process.env.SELLSY_CLIENT,
+        client_secret: process.env.SELLSY_SECRET
+      });
+      sellsyAccessToken = response.data.access_token;
+  
+      // Set the token expiration time (the token is valid for 1 hour)
+      const expiresIn = response.data.expires_in; 
+      sellsyTokenExpiresAt = new Date(now.getTime() + expiresIn * 1000);
+  
+      console.log("Got access token");
+      return sellsyAccessToken;
+    } catch (error) {
+      console.error('Error obtaining access token:', error.response ? error.response.data : error.message);
+      throw error;
+    }
+  };
+  
+
 
 async function handleWebhookOrder(webhookEvent) {
     switch (webhookEvent.event) {

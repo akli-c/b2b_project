@@ -61,7 +61,7 @@ app.listen(port, () => {
 });
 
 
-// registerWebhook()
-// registerWebhookCompanies()
+registerWebhook()
+registerWebhookCompanies()
 
 module.exports = app; // dev

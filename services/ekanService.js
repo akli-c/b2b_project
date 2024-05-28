@@ -37,7 +37,7 @@ function mapCatalogOrderToEkanOrder(orderData) {
       adresse2: orderData.billing_address.address_2 || "",
       codePostal: orderData.billing_address.postal_code,
       ville: orderData.billing_address.city,
-      codePays: orderData.billing_address.country_code.toUpperCase(), 
+      codePays: orderData.billing_address.country_code.toUpperCase(),
       telephoneFixe: orderData.billing_address.phone,
       email: orderData.email,
     },
