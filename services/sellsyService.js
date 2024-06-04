@@ -77,6 +77,10 @@ function mapCatalogOrderToSellsyOrder(orderData) {
             type: "company" 
         }],
         note:'Commande générée depuis Catalog',
+        parent:  {
+            type: "model",
+            id: 50239804,
+        },
         rows: orderData.items.map(item   => ({
             type: 'single', 
             unit_amount: item.unit_price.toString(), 
@@ -84,7 +88,7 @@ function mapCatalogOrderToSellsyOrder(orderData) {
             quantity: item.quantity.toString(),
             reference: item.sku, 
             description: item.title, 
-        })),
+        }))
     };
     console.log('orderici', sellsyOrder)
     return sellsyOrder
