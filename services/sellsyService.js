@@ -2,6 +2,7 @@ const axios = require('axios').default;
 const { formatDate } = require('../helpers')
 const { updateCompanyInCatalog, updateOrderInCatalog } = require('./catalogService')
 const { setUpdatingCompany, getUpdatingCompany, setUpdatingOrder, getUpdatingOrder } = require('../helpers');
+const { createEkanOrder } = require('./ekanService');
 
 //Auth
 let sellsyAccessToken = null;
@@ -43,8 +44,9 @@ async function handleWebhookOrder(webhookEvent) {
       case 'order.placed':
         // Log the event; no action required in Sellsy.
         console.log('Order placed. Awaiting validation.');
+        createEkanOrder(webhookEvent);
         var test = await createSellsyOrder(webhookEvent);
-        await updateDeliveryStepInSellsy(test.id, 'wait'); 
+        await updateDeliveryStepInSellsy(test.id, 'wait');
         break;
       case 'order.completed':
         // Create a draft order in Sellsy.
@@ -87,7 +89,7 @@ function mapCatalogOrderToSellsyOrder(orderData) {
             tax_id: item.tax_id,
             quantity: item.quantity.toString(),
             reference: item.sku, 
-            description: item.title, 
+            description: `${item.title}`
         }))
     };
     console.log('orderici', sellsyOrder)

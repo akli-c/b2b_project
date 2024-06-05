@@ -19,12 +19,12 @@ function mapCatalogOrderToEkanOrder(orderData) {
   return {
     reference: orderData.order_id,  
     referenceClient: orderData.company_id,
-    referenceSecondaire:orderData.seller_order_id,
+    referenceSecondaire: String(orderData.seller_order_id || ""), 
     codeServiceTransporteur: 1,  // change
     numeroLogo: 1,  // change
     dateCommande: moment(orderData.creation_date).format('YYYY-MM-DDTHH:mm:ssZ'),
     listeArticles: orderData.items.map(item => ({
-      refEcommercant: "TS1001", // change 
+      refEcommercant: item.sku,
       quantite: item.quantity,
       prixVenteUnitaire: item.unit_price,
       devisePrixVenteUnitaire: orderData.currency_code.toUpperCase(), 
@@ -61,7 +61,7 @@ function mapCatalogOrderToEkanOrder(orderData) {
   };
 }
 
-const createOrder = async (orderData) => {
+const createEkanOrder = async (orderData) => {
   const authHeader = Buffer.from(`${ekanCredentials.username}:${ekanCredentials.password}`).toString('base64');
   
   const ekanOrderData = mapCatalogOrderToEkanOrder(orderData);
@@ -94,6 +94,6 @@ const createOrder = async (orderData) => {
 };
 
 module.exports = {
-  createOrder,
+  createEkanOrder,
   mapCatalogOrderToEkanOrder
 };

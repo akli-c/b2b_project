@@ -5,7 +5,7 @@ const ekanService = require('../services/ekanService');
 // create order
 router.post('/orders', async (req, res) => {
   try {
-    const result = await ekanService.createOrder(req.body);
+    const result = await ekanService.createEkanOrder(req.body);
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
