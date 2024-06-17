@@ -5,6 +5,7 @@ const catalogService = require('./services/catalogService');
 const cron = require('node-cron')
 const ekanRoutes = require('./routes/ekanRoutes');
 const catalogRoutes = require('./routes/catalogRoutes');
+// const { syncProducts } = require('./services/sellsyService');
 
 app.use(express.json());
 
@@ -61,7 +62,9 @@ app.listen(port, () => {
 });
 
 
-registerWebhook()
-registerWebhookCompanies()
+//registerWebhook()
+//registerWebhookCompanies()
+// syncProducts();
+
 
 module.exports = app; // dev

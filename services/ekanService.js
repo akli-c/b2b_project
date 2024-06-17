@@ -1,12 +1,87 @@
 const axios = require('axios').default;
+const cron = require('node-cron');
 const moment = require('moment');
 const Joi = require('joi');
 const orderSchema = require('../orderSchema');  
+const { updateFulfillmentStatusInCatalog, createFulfillmentInCatalog } = require('./catalogService');
 
 const ekanCredentials = {
   username: process.env.EKAN_MERCHANT_NUMBER,
   password: process.env.EKAN_API_KEY
 };
+
+const pendingOrders = [
+  {  
+    order_id: "order_01J0JVJ5V4EY3PAY2YQ8TCZ0T4",
+    seller_order_id: "50612206",
+    items: [{
+      line_id: "item_01J0JVJ1WZCZ22KV5Y8KHNHFBD",
+      quantity: 12
+    }]
+  }
+];
+
+const checkParcelInEkan = async (order_id) => {
+  const authHeader = Buffer.from(`${ekanCredentials.username}:${ekanCredentials.password}`).toString('base64');
+  
+  try {
+    const response = await axios.post('https://oms.ekan-democommercant.fr/api/ecomm/v1/colis/liste', {
+      referenceCommande: order_id
+    }, {
+      headers: {
+        'Authorization': `Basic ${authHeader}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    console.log('Parcel status from E-Kan:', response.data);
+    return response.data;
+
+  } catch (error) {
+    console.error('Failed to get parcel status from E-Kan', error.response ? error.response.data : error.message);
+    throw new Error('Failed to get parcel status from E-Kan');
+  }
+};
+
+const isOrderShipped = (ekanOrderData) => {
+  if (ekanOrderData.commandes && ekanOrderData.commandes.length > 0) {
+    const order = ekanOrderData.commandes[0];
+    return order.etatLivraison === 'EXPEDIE' || order.etatLivraisonLibelle === 'Expédié'; // Ajuster en fonction de la réponse exacte
+  }
+  return false;
+};  
+
+// Cron job to check the status of pending orders in Ekan
+cron.schedule('*/10 * * * * *', async () => { // Runs every 5 minutes
+  console.log('Running cron job to check pending orders in E-Kan', pendingOrders);
+  
+  for (let i = 0; i < pendingOrders.length; i++) {
+    const order = pendingOrders[i];
+    
+    try {
+      const ekanParcelData = await checkParcelInEkan(order.order_id);
+
+      if (ekanParcelData.colis && ekanParcelData.colis.length > 0) {
+        const parcel = ekanParcelData.colis[0];
+        const trackingUrl = parcel.urlTracking;
+
+        // await updateFulfillmentStatusInCatalog(order, trackingUrl, 'prepared');
+        await createFulfillmentInCatalog(order, trackingUrl, 'prepared');
+
+        console.log('Order marked as prepared in Catalog with tracking URL');
+
+        // Remove the order from pendingOrders once it is marked as prepared
+        pendingOrders.splice(i, 1);
+        i--; // Adjust the index after removal
+      } else {
+        console.log('No parcel found for this order in E-Kan');
+      }
+    } catch (error) {
+      console.error('Error processing order:', error.message);
+    }
+  }
+});
+
 
 function mapCatalogOrderToEkanOrder(orderData) {
   console.log('Mapping order data:', orderData);
@@ -95,5 +170,8 @@ const createEkanOrder = async (orderData) => {
 
 module.exports = {
   createEkanOrder,
-  mapCatalogOrderToEkanOrder
+  mapCatalogOrderToEkanOrder, 
+  checkParcelInEkan,
+  isOrderShipped, 
+  pendingOrders
 };

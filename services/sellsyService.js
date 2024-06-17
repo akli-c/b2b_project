@@ -1,8 +1,8 @@
 const axios = require('axios').default;
 const { formatDate } = require('../helpers')
-const { updateCompanyInCatalog, updateOrderInCatalog } = require('./catalogService')
+const { updateCompanyInCatalog, updateOrderInCatalog, updateOrderStatusInCatalog, updateFulfillmentStatusInCatalog } = require('./catalogService')
 const { setUpdatingCompany, getUpdatingCompany, setUpdatingOrder, getUpdatingOrder } = require('../helpers');
-const { createEkanOrder } = require('./ekanService');
+const { createEkanOrder, isOrderShipped, checkParcelInEkan, pendingOrders } = require('./ekanService');
 
 //Auth
 let sellsyAccessToken = null;
@@ -39,32 +39,107 @@ const getSellsyAccessToken = async () => {
   
 
 
-async function handleWebhookOrder(webhookEvent) {
+  async function handleWebhookOrder(webhookEvent) {
     switch (webhookEvent.event) {
-      case 'order.placed':
-        // Log the event; no action required in Sellsy.
+    case 'order.placed':
+        // Lorsqu'une commande est passée, créez une commande dans Sellsy avec le statut "en attente".
         console.log('Order placed. Awaiting validation.');
-        createEkanOrder(webhookEvent);
-        var test = await createSellsyOrder(webhookEvent);
-        await updateDeliveryStepInSellsy(test.id, 'wait');
+  
+        // Créez la commande dans Sellsy et mettez à jour le statut en "wait".
+        var bdc = await createSellsyOrder(webhookEvent);
+        await updateDeliveryStepInSellsy(bdc.id, 'wait');
         break;
-      case 'order.completed':
-        // Create a draft order in Sellsy.
-        console.log('Order validated. Creating bon de commande brouillon in Sellsy.');
-        await updateDeliveryStepInSellsy(webhookEvent.seller_order_id, 'picking');
-        break;
-      case 'order.shipment_created':
-        // Finalize the order and create an invoice in Sellsy.
-        console.log('Order shipped. Finalizing order and creating invoice in Sellsy.');
-        await updateDeliveryStepInSellsy(webhookEvent.seller_order_id, 'sent'); 
-        await createSellsyInvoice(webhookEvent);
-        break;
-      default:
-        console.log('Received an unrecognized event type.');
-    }
+
+    case 'order.completed':
+      await createEkanOrder(webhookEvent);
+      
+      // Add the order to pendingOrders to be checked by the cron job
+      pendingOrders.push({
+        order_id: webhookEvent.order_id,
+        seller_order_id: webhookEvent.seller_order_id,
+        items: webhookEvent.items.map(item => ({
+          line_id: item.catalog_line_id,
+          quantity: item.quantity
+        }))
+      });
+      
+      console.log('Order added to pending list for E-Kan checking.');
+      
+      console.log('Order prepared. Updating draft order in Sellsy.');
+      await updateDeliveryStepInSellsy(webhookEvent.seller_order_id, 'picking');
+      break;
+      
+    case 'order.fulfillment_created':
+      // Lorsqu'un fullfilment est créé, vérifiez le statut dans Ekan.
+      console.log('Order fulfillment created. Checking status in E-Kan.');
+      try {
+        const ekanOrderData = await checkParcelInEkan(webhookEvent.order_id);
+
+        if (isOrderShipped(ekanOrderData)) {
+          // Si la commande est expédiée, mettez à jour le statut de la commande dans Catalog.
+          await updateOrderStatusInCatalog(webhookEvent.order_id, 'shipped');
+          console.log('Order marked as shipped in Catalog');
+        } else {
+          console.log('Order is not yet shipped in E-Kan');
+        }
+      } catch (error) {
+        console.error('Error processing webhook:', error.message);
+      }
+      break;
+
+
+    case 'order.shipment_created':
+      // Lorsqu'un envoi est créé, mettez à jour le statut dans Sellsy et créez une facture.
+      console.log('Order shipped. Finalizing order and creating invoice in Sellsy.');
+      await updateDeliveryStepInSellsy(webhookEvent.seller_order_id, 'sent');
+      await createSellsyInvoice(webhookEvent);  
+      break;
+
+    default:
+      // Pour tout autre type d'événement non reconnu.
+      console.log('Received an unrecognized event type.');
+  }
   }
 
-//mapping bon de commande 
+  
+
+async function searchSellsyItems(itemName) {
+    const accessToken = await getSellsyAccessToken();
+    const apiUrl = 'https://apifeed.sellsy.com/0/';
+    const requestSettings = {
+        method: 'Catalogue.getList',
+        params: {
+            type: 'item',
+            search: {
+                name: itemName,
+            },
+            pagination: {
+                pagenum: 1,
+                nbperpage: 1,
+            }
+        }
+    };
+
+    const params = new URLSearchParams();
+    params.append('io_mode', 'json');
+    params.append('do_in', JSON.stringify(requestSettings));
+
+    try {
+        const response = await axios.post(apiUrl, params, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+        });
+        console.log('Items found in Sellsy:', response.data.response.result);
+        return response.data.response.result;
+    } catch (error) {
+        console.error('Error searching items in Sellsy:', error.response ? error.response.data : error.message);
+        throw error;
+    }
+}
+
+  //mapping bon de commande 
 function mapCatalogOrderToSellsyOrder(orderData) {
     
     const sellsyOrder = {
@@ -79,17 +154,17 @@ function mapCatalogOrderToSellsyOrder(orderData) {
             type: "company" 
         }],
         note:'Commande générée depuis Catalog',
-        parent:  {
-            type: "model",
-            id: 50239804,
-        },
+        // parent:  {
+        //     type: "model",
+        //     id: 50415066,
+        // },
         rows: orderData.items.map(item   => ({
             type: 'single', 
             unit_amount: item.unit_price.toString(), 
-            tax_id: item.tax_id,
+            tax_id: 5881073,
             quantity: item.quantity.toString(),
             reference: item.sku, 
-            description: `${item.title}`
+            description: `${item.title}<br/> <strong>Code EAN : </strong>${item.ean}<br/><strong>Code douanier : </strong>${item.hs_code}`
         }))
     };
     console.log('orderici', sellsyOrder)
@@ -153,13 +228,18 @@ async function createSellsyOrder(orderData) {
         return;
     }
 
-
     const accessToken = await getSellsyAccessToken();
     const apiUrl = 'https://api.sellsy.com/v2/orders';
-    const processedOrderData = mapCatalogOrderToSellsyOrder(orderData);
 
     try {
         setUpdatingOrder(true); // Set the flag before the update
+
+        // Search for each item in the order
+
+        const processedOrderData = mapCatalogOrderToSellsyOrder(orderData);
+
+        console.log('Processed order data:', processedOrderData);
+
         const response = await axios.post(apiUrl, processedOrderData, {
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
@@ -180,6 +260,7 @@ async function createSellsyOrder(orderData) {
         setUpdatingOrder(false); // Reset the flag after the update
     }
 }
+
 
 
 //Facture sellsy
@@ -981,6 +1062,7 @@ function needsUpdate(existing, incoming) {
            existing.position !== incoming.position;
 }
 
+////////////////////////////////////////////////////////////////// products//////////////////////////////////////////////////////////////
 
 // async function synchronizeCompanies() {
 //     const catalogCompanies = await getAllCompanies();
@@ -999,6 +1081,101 @@ function needsUpdate(existing, incoming) {
 //     }
 // }
 
+// const searchSellsyProduct = async (productName) => {
+//     const accessToken = await getSellsyAccessToken();
+//     const apiUrl = 'https://apifeed.sellsy.com/0/';
+//     const requestSettings = {
+//       method: 'Catalogue.getList',
+//       params: {
+//         type: 'item',
+//         search: {
+//           name: productName,
+//         },
+//         pagination: {
+//           pagenum: 1,
+//           nbperpage: 1,
+//         }
+//       }
+//     };
+  
+//     const params = new URLSearchParams();
+//     params.append('io_mode', 'json');
+//     params.append('do_in', JSON.stringify(requestSettings));
+  
+//     try {
+//       const response = await axios.post(apiUrl, params, {
+//         headers: {
+//           'Authorization': `Bearer ${accessToken}`,
+//           'Content-Type': 'application/x-www-form-urlencoded',
+//         },
+//       });
+//       console.log('Items found in Sellsy:', response.data.response.result);
+//       return response.data.response.result;
+//     } catch (error) {
+//       console.error('Error searching items in Sellsy:', error.response ? error.response.data : error.message);
+//       throw error;
+//     }
+//   };
+
+
+// // Create or update a product in Sellsy
+// const createOrUpdateSellsyProduct = async (product) => {
+//     const accessToken = await getSellsyAccessToken();
+//     const apiUrl = 'https://api.sellsy.com/v2/items';
+//     const variant = product.variants[0]; // Assuming the first variant
+//     const productExists = await searchSellsyProduct(variant.title);
+  
+//     const referencePrice = variant && variant.rsp_per_unit ? variant.rsp_per_unit.toString() : '0';
+  
+//     const requestData = {
+//       type: 'product',
+//       name: variant.title,
+//       reference: variant.sku,
+//       reference_price: referencePrice,
+//       description: `${variant.title} - ${product.description}`
+//     };
+  
+//     try {
+//       let response;
+//       const productExistsArray = Object.keys(productExists);
+//       if (productExistsArray.length > 0) {
+//         const productId = productExistsArray[0];
+//         response = await axios.put(`${apiUrl}/${productId}`, requestData, {
+//           headers: {
+//             'Authorization': `Bearer ${accessToken}`,
+//             'Content-Type': 'application/json',
+//           },
+//         });
+//         console.log('Product updated in Sellsy:', response.data);
+//       } else {
+//         response = await axios.post(apiUrl, requestData, {
+//           headers: {
+//             'Authorization': `Bearer ${accessToken}`,
+//             'Content-Type': 'application/json',
+//           },
+//         });
+//         console.log('Product created in Sellsy:', response.data);
+//       }
+//       return response.data;
+//     } catch (error) {
+//       console.error('Error creating/updating product in Sellsy:', error.response ? error.response.data : error.message);
+//       throw error;
+//     }
+//   };
+  
+//   const syncProducts = async () => {
+//     try {
+//       const catalogProducts = await fetchProductsFromCatalog();
+  
+//       for (const product of catalogProducts) {
+//         await createOrUpdateSellsyProduct(product);
+//       }
+  
+//       console.log('Products synced successfully.');
+//     } catch (error) {
+//       console.error('Error syncing products:', error);
+//     }
+//   };
 
 
 module.exports = {
@@ -1006,6 +1183,7 @@ module.exports = {
     createSellsyOrder,
     createSellsyInvoice,
     webhookHandler,
-    handleWebhookOrder
+    handleWebhookOrder,
+    // syncProducts
 };
   
