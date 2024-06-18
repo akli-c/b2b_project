@@ -1,8 +1,8 @@
 const axios = require('axios').default;
 const { formatDate } = require('../helpers')
-const { updateCompanyInCatalog, updateOrderInCatalog, updateOrderStatusInCatalog, updateFulfillmentStatusInCatalog } = require('./catalogService')
+const { updateCompanyInCatalog, updateOrderInCatalog, updateFulfillmentStatusInCatalog } = require('./catalogService')
 const { setUpdatingCompany, getUpdatingCompany, setUpdatingOrder, getUpdatingOrder } = require('../helpers');
-const { createEkanOrder, isOrderShipped, checkParcelInEkan, pendingOrders } = require('./ekanService');
+const { createEkanOrder, isOrderShipped, checkParcelInEkan, pendingOrders, pendingShippedOrders } = require('./ekanService');
 
 //Auth
 let sellsyAccessToken = null;
@@ -42,10 +42,9 @@ const getSellsyAccessToken = async () => {
   async function handleWebhookOrder(webhookEvent) {
     switch (webhookEvent.event) {
     case 'order.placed':
-        // Lorsqu'une commande est passée, créez une commande dans Sellsy avec le statut "en attente".
+        // Lorsqu'une commande est passée, bdc dans Sellsy avec le statut "en attente".
         console.log('Order placed. Awaiting validation.');
   
-        // Créez la commande dans Sellsy et mettez à jour le statut en "wait".
         var bdc = await createSellsyOrder(webhookEvent);
         await updateDeliveryStepInSellsy(bdc.id, 'wait');
         break;
@@ -53,7 +52,7 @@ const getSellsyAccessToken = async () => {
     case 'order.completed':
       await createEkanOrder(webhookEvent);
       
-      // Add the order to pendingOrders to be checked by the cron job
+      // + the order to pendingOrders to be checked by the cron job
       pendingOrders.push({
         order_id: webhookEvent.order_id,
         seller_order_id: webhookEvent.seller_order_id,
@@ -70,33 +69,27 @@ const getSellsyAccessToken = async () => {
       break;
       
     case 'order.fulfillment_created':
-      // Lorsqu'un fullfilment est créé, vérifiez le statut dans Ekan.
-      console.log('Order fulfillment created. Checking status in E-Kan.');
-      try {
-        const ekanOrderData = await checkParcelInEkan(webhookEvent.order_id);
-
-        if (isOrderShipped(ekanOrderData)) {
-          // Si la commande est expédiée, mettez à jour le statut de la commande dans Catalog.
-          await updateOrderStatusInCatalog(webhookEvent.order_id, 'shipped');
-          console.log('Order marked as shipped in Catalog');
-        } else {
-          console.log('Order is not yet shipped in E-Kan');
-        }
-      } catch (error) {
-        console.error('Error processing webhook:', error.message);
-      }
+      // fullfilment est créé (commande préparée) ajouter aux commandes en attente d'expédition
+      pendingShippedOrders.push({
+        order_id: webhookEvent.order_id,
+        seller_order_id: webhookEvent.seller_order_id,
+        items: webhookEvent.items.map(item => ({
+          line_id: item.catalog_line_id,
+          quantity: item.quantity
+        }))
+      });
+      console.log('Order fulfillment created. Added to pending shipped orders.');
       break;
 
-
     case 'order.shipment_created':
-      // Lorsqu'un envoi est créé, mettez à jour le statut dans Sellsy et créez une facture.
+      // envoi est créé, mettre à jour le statut dans Sellsy et transformer bdc en facture
       console.log('Order shipped. Finalizing order and creating invoice in Sellsy.');
       await updateDeliveryStepInSellsy(webhookEvent.seller_order_id, 'sent');
       await createSellsyInvoice(webhookEvent);  
       break;
 
     default:
-      // Pour tout autre type d'événement non reconnu.
+      // pour le reste des events
       console.log('Received an unrecognized event type.');
   }
   }
@@ -232,9 +225,9 @@ async function createSellsyOrder(orderData) {
     const apiUrl = 'https://api.sellsy.com/v2/orders';
 
     try {
-        setUpdatingOrder(true); // Set the flag before the update
+        setUpdatingOrder(true); // setting flag before the update
 
-        // Search for each item in the order
+        // search for each item in the order
 
         const processedOrderData = mapCatalogOrderToSellsyOrder(orderData);
 
@@ -249,7 +242,7 @@ async function createSellsyOrder(orderData) {
         console.log('Order created in Sellsy:', response.data);
         const sellsyOrderId = response.data.id;
 
-        // Update the order in catalog with the new Sellsy order ID
+        // update the order in catalog with the new Sellsy order ID
         await updateOrderInCatalog(orderData.order_id, sellsyOrderId);
 
         return response.data;
@@ -257,7 +250,7 @@ async function createSellsyOrder(orderData) {
         console.error('Error creating order in Sellsy:', error.response ? error.response.data : error.message);
         throw error;
     } finally {
-        setUpdatingOrder(false); // Reset the flag after the update
+        setUpdatingOrder(false); // reset flag after the update
     }
 }
 

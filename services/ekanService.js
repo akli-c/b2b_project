@@ -10,16 +10,9 @@ const ekanCredentials = {
   password: process.env.EKAN_API_KEY
 };
 
-const pendingOrders = [
-  {  
-    order_id: "order_01J0JVJ5V4EY3PAY2YQ8TCZ0T4",
-    seller_order_id: "50612206",
-    items: [{
-      line_id: "item_01J0JVJ1WZCZ22KV5Y8KHNHFBD",
-      quantity: 12
-    }]
-  }
-];
+const pendingOrders = [];
+
+const pendingShippedOrders = [];
 
 const checkParcelInEkan = async (order_id) => {
   const authHeader = Buffer.from(`${ekanCredentials.username}:${ekanCredentials.password}`).toString('base64');
@@ -52,7 +45,7 @@ const isOrderShipped = (ekanOrderData) => {
 };  
 
 // Cron job to check the status of pending orders in Ekan
-cron.schedule('*/10 * * * * *', async () => { // Runs every 5 minutes
+cron.schedule('*/5 * * * *', async () => { // every 5 min
   console.log('Running cron job to check pending orders in E-Kan', pendingOrders);
   
   for (let i = 0; i < pendingOrders.length; i++) {
@@ -70,7 +63,7 @@ cron.schedule('*/10 * * * * *', async () => { // Runs every 5 minutes
 
         console.log('Order marked as prepared in Catalog with tracking URL');
 
-        // Remove the order from pendingOrders once it is marked as prepared
+        // remove order from pendingOrders once it is marked as prepared
         pendingOrders.splice(i, 1);
         i--; // Adjust the index after removal
       } else {
@@ -82,6 +75,35 @@ cron.schedule('*/10 * * * * *', async () => { // Runs every 5 minutes
   }
 });
 
+// Cron job to check the status of pending shipped orders in Ekan
+cron.schedule('*/5 * * * *', async () => {//5 min
+  console.log('Running cron job to check pending shipped orders in E-Kan', pendingShippedOrders);
+
+  for (let i = 0; i < pendingShippedOrders.length; i++) {
+    const order = pendingShippedOrders[i];
+
+    try {
+      const ekanParcelData = await checkParcelInEkan(order.order_id);
+
+      if (isOrderShipped(ekanParcelData)) {
+        const parcel = ekanParcelData.colis[0];
+        const trackingUrl = parcel.urlTracking;
+
+        await updateFulfillmentStatusInCatalog(order, trackingUrl, 'shipped');
+
+        console.log('Order marked as shipped in Catalog with tracking URL');
+
+        // remove order from pendingShippedOrders once it is marked as shipped
+        pendingShippedOrders.splice(i, 1);
+        i--; // come back
+      } else {
+        console.log('Order is not yet shipped in E-Kan');
+      }
+    } catch (error) {
+      console.error('Error processing order:', error.message);
+    }
+  }
+});
 
 function mapCatalogOrderToEkanOrder(orderData) {
   console.log('Mapping order data:', orderData);
@@ -173,5 +195,6 @@ module.exports = {
   mapCatalogOrderToEkanOrder, 
   checkParcelInEkan,
   isOrderShipped, 
-  pendingOrders
+  pendingOrders,
+  pendingShippedOrders
 };
