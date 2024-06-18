@@ -141,7 +141,7 @@ function mapCatalogOrderToSellsyOrder(orderData) {
         created: orderData.creation_date,  
         subject: `Order for ${orderData.company_name}`,
         currency: orderData.currency_code.toUpperCase(),
-        owner_id:297168, //staff
+        owner_id:297168, //staff à changer par aurore 
         related: [{
             id: parseInt(orderData.company_external_id), 
             type: "company" 

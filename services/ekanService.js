@@ -12,7 +12,7 @@ const ekanCredentials = {
 
 const pendingOrders = [];
 
-const pendingShippedOrders = [];
+const pendingShippedOrders = []
 
 const checkParcelInEkan = async (order_id) => {
   const authHeader = Buffer.from(`${ekanCredentials.username}:${ekanCredentials.password}`).toString('base64');
@@ -37,9 +37,9 @@ const checkParcelInEkan = async (order_id) => {
 };
 
 const isOrderShipped = (ekanOrderData) => {
-  if (ekanOrderData.commandes && ekanOrderData.commandes.length > 0) {
-    const order = ekanOrderData.commandes[0];
-    return order.etatLivraison === 'EXPEDIE' || order.etatLivraisonLibelle === 'Expédié'; // Ajuster en fonction de la réponse exacte
+  if (ekanOrderData.colis && ekanOrderData.colis.length > 0) {
+    const colis = ekanOrderData.colis[0];
+    return colis.etat === 'EXPEDIE' || colis.etatLibelle === 'Expédié'; 
   }
   return false;
 };  
@@ -76,7 +76,7 @@ cron.schedule('*/5 * * * *', async () => { // every 5 min
 });
 
 // Cron job to check the status of pending shipped orders in Ekan
-cron.schedule('*/5 * * * *', async () => {//5 min
+cron.schedule('*/5 * * * *', async () => { //5 min
   console.log('Running cron job to check pending shipped orders in E-Kan', pendingShippedOrders);
 
   for (let i = 0; i < pendingShippedOrders.length; i++) {
@@ -151,7 +151,7 @@ function mapCatalogOrderToEkanOrder(orderData) {
       email: orderData.email,
     },
     montantHT: orderData.items.reduce((total, item) => total + (item.unit_price * item.quantity), 0),
-    montantAssure: orderData.items.reduce((total, item) => total + (item.unit_price * item.quantity), 0),
+    montantAssure: orderData.items.reduce((total, item) => total + (item.unit_price * item.quantity), 0), // checker si on le laisse 
     deviseMontantAssure: orderData.currency_code.toUpperCase(), 
     fraisDePort: orderData.shipping_price,
     deviseFraisDePort: orderData.currency_code.toUpperCase(), 
