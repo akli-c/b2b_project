@@ -85,7 +85,7 @@ const getSellsyAccessToken = async () => {
       // envoi est créé, mettre à jour le statut dans Sellsy et transformer bdc en facture
       console.log('Order shipped. Finalizing order and creating invoice in Sellsy.');
       await updateDeliveryStepInSellsy(webhookEvent.seller_order_id, 'sent');
-      await createSellsyInvoice(webhookEvent);  
+      await createSellsyInvoice(webhookEvent, webhookEvent.seller_order_id);  
       break;
 
     default:
@@ -172,7 +172,7 @@ function mapCatalogOrderToSellsyInvoice(orderData, orderId) {
         created: new Date(),
         parent: {
             type: "order",
-            id: orderId,
+            id: parseInt(orderId)
         },
     };
     return sellsyInvoice;
