@@ -41,15 +41,14 @@ const getSellsyAccessToken = async () => {
 
   async function handleWebhookOrder(webhookEvent) {
     switch (webhookEvent.event) {
-    case 'order.placed':
-        // Lorsqu'une commande est passée, bdc dans Sellsy avec le statut "en attente".
-        console.log('Order placed. Awaiting validation.');
+    // case 'order.placed':
+    //     // Lorsqu'une commande est passée, bdc dans Sellsy avec le statut "en attente".
+    //     console.log('Order placed. Awaiting validation.');
   
-        var bdc = await createSellsyOrder(webhookEvent);
-        await updateDeliveryStepInSellsy(bdc.id, 'wait');
-        break;
+    //     break;
 
     case 'order.completed':
+      var bdc = await createSellsyOrder(webhookEvent);
       await createEkanOrder(webhookEvent);
       
       // + the order to pendingOrders to be checked by the cron job
@@ -65,7 +64,9 @@ const getSellsyAccessToken = async () => {
       console.log('Order added to pending list for E-Kan checking.');
       
       console.log('Order prepared. Updating draft order in Sellsy.');
-      await updateDeliveryStepInSellsy(webhookEvent.seller_order_id, 'picking');
+      await updateDeliveryStepInSellsy(bdc.id, 'picking');
+
+
       break;
       
     case 'order.fulfillment_created':
@@ -139,9 +140,9 @@ function mapCatalogOrderToSellsyOrder(orderData) {
         date: formatDate(orderData.creation_date), 
         due_date: formatDate(orderData.delivery_date), 
         created: orderData.creation_date,  
-        subject: `Order for ${orderData.company_name}`,
+        subject: `<strong>Commande CUT BY FRED ${formatDate(orderData.creation_date)}</strong>`,
         currency: orderData.currency_code.toUpperCase(),
-        owner_id:297168, //staff à changer par aurore 
+        owner_id:297168, //staff à changer par id aurore en prod
         related: [{
             id: parseInt(orderData.company_external_id), 
             type: "company" 
@@ -151,15 +152,29 @@ function mapCatalogOrderToSellsyOrder(orderData) {
         //     type: "model",
         //     id: 50415066,
         // },
-        rows: orderData.items.map(item   => ({
-            type: 'single', 
-            unit_amount: item.unit_price.toString(), 
-            tax_id: 5881073,
-            quantity: item.quantity.toString(),
-            reference: item.sku, 
-            description: `${item.title}<br/> <strong>Code EAN : </strong>${item.ean}<br/><strong>Code douanier : </strong>${item.hs_code}`
-        }))
-    };
+        rows: [
+            ...orderData.items.map(item => ({
+              type: 'single',
+              unit_amount: item.unit_price.toString(),
+              tax_id: 5881073,
+              quantity: item.quantity.toString(),
+              reference: item.sku,
+              description: `${item.title}<br/> <strong>Code EAN : </strong>${item.ean}<br/><strong>Code douanier : </strong>${item.hs_code}`
+            })),
+            {
+              type: 'shipping',
+              related : {
+                id: 16715141,
+                type: "shipping"
+            },
+              unit_amount: orderData.shipping_price.toString(),
+              tax_id: orderData.shipping_tax_id, 
+              quantity: '1',
+              reference: orderData.shipping_method,
+              description: `Shipping - ${orderData.shipping_method}`
+            }
+          ]
+        };
     console.log('orderici', sellsyOrder)
     return sellsyOrder
 }
