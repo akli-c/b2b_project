@@ -3,7 +3,11 @@ const cron = require('node-cron');
 const moment = require('moment');
 const Joi = require('joi');
 const orderSchema = require('../orderSchema');  
-const { updateFulfillmentStatusInCatalog, createFulfillmentInCatalog } = require('./catalogService');
+const { 
+  updateFulfillmentStatusInCatalog, 
+  createFulfillmentInCatalog
+} = require('./catalogService');
+
 
 const ekanCredentials = {
   username: process.env.EKAN_MERCHANT_NUMBER,
@@ -45,7 +49,7 @@ const isOrderShipped = (ekanOrderData) => {
 };  
 
 // Cron job to check the status of pending orders in Ekan
-cron.schedule('*/5 * * * *', async () => { // every 5 min
+cron.schedule('*/50 * * * *', async () => { // every 5 min
   console.log('Running cron job to check pending orders in E-Kan', pendingOrders);
   
   for (let i = 0; i < pendingOrders.length; i++) {
@@ -76,7 +80,7 @@ cron.schedule('*/5 * * * *', async () => { // every 5 min
 });
 
 // Cron job to check the status of pending shipped orders in Ekan
-cron.schedule('*/5 * * * *', async () => { //5 min
+cron.schedule('*/50 * * * *', async () => { //5 min
   console.log('Running cron job to check pending shipped orders in E-Kan', pendingShippedOrders);
 
   for (let i = 0; i < pendingShippedOrders.length; i++) {
@@ -158,6 +162,39 @@ function mapCatalogOrderToEkanOrder(orderData) {
   };
 }
 
+const createCanceledFulfillmentInCatalog = async (pendingOrder) => {
+  const catalogApiUrl = `/catalog/fulfillments`;
+  const fulfillment = {
+    fulfillments: [
+      {
+        order_id: pendingOrder.order_id,
+        status: 'canceled',
+        items: pendingOrder.items.map(item => ({
+          line_id: item.line_id || item.catalog_line_id,
+          quantity: item.quantity
+        }))
+      }
+    ]
+  };
+
+  const startCatalogApi = axios.create({
+    baseURL: 'https://o91mts5a64.execute-api.eu-west-1.amazonaws.com/dev/', 
+    headers: {
+      'X-API-KEY': process.env.STARTCATALOG_API_KEY,
+      'Content-Type': 'application/json', 
+      'accept':"application/json"
+    }
+  });
+  try {
+    const response = await startCatalogApi.post(catalogApiUrl, fulfillment);
+    console.log('Canceled fulfillment created in Catalog:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to create canceled fulfillment in Catalog', error.response ? error.response.data : error.message);
+    throw new Error('Failed to create canceled fulfillment in Catalog');
+  }
+};
+
 const createEkanOrder = async (orderData) => {
   const authHeader = Buffer.from(`${ekanCredentials.username}:${ekanCredentials.password}`).toString('base64');
   
@@ -181,6 +218,11 @@ const createEkanOrder = async (orderData) => {
       }
     });
 
+    // if (response.data.etat === 'ATTENTE_STOCK') { 
+    //   await createCanceledFulfillmentInCatalog(orderData);
+    //   console.log('Order marked as canceled in Catalog due to pending stock');
+    // }
+
     console.log('Order successfully sent to E-Kan', response.data);
     return response.data;
 
@@ -190,7 +232,29 @@ const createEkanOrder = async (orderData) => {
   }
 };
 
+
+
+const fetchStockFromEKan = async () => {
+  const authHeader = Buffer.from(`${ekanCredentials.username}:${ekanCredentials.password}`).toString('base64');
+  
+  try {
+    const response = await axios.post('https://oms.ekan-democommercant.fr/api/ecomm/v1/articles/stockPositif', {
+      typeProduit: 'Article'
+    }, {
+      headers: {
+        'Authorization': `Basic ${authHeader}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data.articles;
+  } catch (error) {
+    console.error('Error fetching stock data from e-kan:', error.response ? error.response.data : error.message);
+    throw error;
+  }
+};
+
 module.exports = {
+  fetchStockFromEKan,
   createEkanOrder,
   mapCatalogOrderToEkanOrder, 
   checkParcelInEkan,

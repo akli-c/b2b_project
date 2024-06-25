@@ -1,6 +1,6 @@
 const axios = require('axios').default;
 const { formatDate } = require('../helpers')
-const { updateCompanyInCatalog, updateOrderInCatalog, updateFulfillmentStatusInCatalog } = require('./catalogService')
+const { updateCompanyInCatalog, updateOrderInCatalog, updateFulfillmentStatusInCatalog, fetchCompanyFromCatalog } = require('./catalogService')
 const { setUpdatingCompany, getUpdatingCompany, setUpdatingOrder, getUpdatingOrder } = require('../helpers');
 const { createEkanOrder, isOrderShipped, checkParcelInEkan, pendingOrders, pendingShippedOrders } = require('./ekanService');
 
@@ -41,59 +41,76 @@ const getSellsyAccessToken = async () => {
 
   async function handleWebhookOrder(webhookEvent) {
     switch (webhookEvent.event) {
-    // case 'order.placed':
-    //     // Lorsqu'une commande est passée, bdc dans Sellsy avec le statut "en attente".
-    //     console.log('Order placed. Awaiting validation.');
-  
-    //     break;
-
     case 'order.completed':
-      var bdc = await createSellsyOrder(webhookEvent);
-      await createEkanOrder(webhookEvent);
-      
-      // + the order to pendingOrders to be checked by the cron job
-      pendingOrders.push({
-        order_id: webhookEvent.order_id,
-        seller_order_id: webhookEvent.seller_order_id,
-        items: webhookEvent.items.map(item => ({
-          line_id: item.catalog_line_id,
-          quantity: item.quantity
-        }))
-      });
-      
-      console.log('Order added to pending list for E-Kan checking.');
-      
-      console.log('Order prepared. Updating draft order in Sellsy.');
-      await updateDeliveryStepInSellsy(bdc.id, 'picking');
+        // Check if the company exists in Sellsy
+        let companyData = await findCompanyInSellsy(webhookEvent.company_name);
+
+        if (!companyData) {
+            console.log(`Company ${webhookEvent.company_name} not found in Sellsy. Fetching details from catalog.`);
+            
+            // Fetch company details from catalog
+            const catalogCompanyData = await fetchCompanyFromCatalog(webhookEvent.company_id);
+
+            if (!catalogCompanyData) {
+                throw new Error(`Company ${webhookEvent.company_name} not found in Catalog.`);
+            }
+
+            companyData = await createEntityInSellsy(catalogCompanyData);
 
 
-      break;
-      
+            console.log(`Company ${webhookEvent.company_name} created with ID: ${companyData}`);
+        } else {
+            console.log(`Company ${webhookEvent.company_name} found in Sellsy with ID: ${companyData.id}`);
+        }
+
+        // Process the order as usual
+        var bdc = await createSellsyOrder(webhookEvent);
+        await createEkanOrder(webhookEvent);
+
+        // Add the order to pendingOrders to be checked by the cron job
+        pendingOrders.push({
+            order_id: webhookEvent.order_id,
+            seller_order_id: webhookEvent.seller_order_id,
+            items: webhookEvent.items.map(item => ({
+                line_id: item.catalog_line_id,
+                quantity: item.quantity
+            }))
+        });
+
+        console.log('Order added to pending list for E-Kan checking.');
+
+        console.log('Order prepared. Updating draft order in Sellsy.');
+        await updateDeliveryStepInSellsy(bdc.id, 'picking');
+
+        break;
+
     case 'order.fulfillment_created':
-      // fullfilment est créé (commande préparée) ajouter aux commandes en attente d'expédition
-      pendingShippedOrders.push({
-        order_id: webhookEvent.order_id,
-        seller_order_id: webhookEvent.seller_order_id,
-        items: webhookEvent.items.map(item => ({
-          line_id: item.catalog_line_id,
-          quantity: item.quantity
-        }))
-      });
-      console.log('Order fulfillment created. Added to pending shipped orders.');
-      break;
+        // Fulfillment created (order prepared), add to pending shipped orders
+        pendingShippedOrders.push({
+            order_id: webhookEvent.order_id,
+            seller_order_id: webhookEvent.seller_order_id,
+            items: webhookEvent.items.map(item => ({
+                line_id: item.catalog_line_id,
+                quantity: item.quantity
+            }))
+        });
+        console.log('Order fulfillment created. Added to pending shipped orders.');
+        break;
 
     case 'order.shipment_created':
-      // envoi est créé, mettre à jour le statut dans Sellsy et transformer bdc en facture
-      console.log('Order shipped. Finalizing order and creating invoice in Sellsy.');
-      await updateDeliveryStepInSellsy(webhookEvent.seller_order_id, 'sent');
-      await createSellsyInvoice(webhookEvent, webhookEvent.seller_order_id);  
-      break;
+        // Shipment created, update status in Sellsy and transform order to invoice
+        console.log('Order shipped. Finalizing order and creating invoice in Sellsy.');
+        await updateDeliveryStepInSellsy(webhookEvent.seller_order_id, 'sent');
+        await createSellsyInvoice(webhookEvent, webhookEvent.seller_order_id);
+        break;
 
     default:
-      // pour le reste des events
-      console.log('Received an unrecognized event type.');
-  }
-  }
+        // For other events
+        console.log('Received an unrecognized event type.');
+    }
+}
+
+
 
   
 
@@ -561,9 +578,10 @@ async function webhookHandler(webhookData) {
         const companyData = await findCompanyInSellsy(company.name);
         if (!companyData) {
           console.log('No existing company found to update:', company.name);
+          const companyData = await createEntityInSellsy(company);
+         console.log('Company created with ID:', companyData);
           return;
         }
-        
         // Determine if type transformation is needed
         const needsTransformToCustomer = company.catalog_names.includes("prospect") && companyData.type === 'client';
         const needsTransformToProspect = !company.catalog_names.includes("prospect") && companyData.type === 'prospect';
@@ -749,8 +767,12 @@ async function createEntityInSellsy(company) {
     const accessToken = await getSellsyAccessToken();
     const apiUrl = 'https://apifeed.sellsy.com/0/';
     const sellsyCompanyData = mapCatalogToSellsy(company);
-    const entityType = company.catalog_names.includes("prospect") ? 'Prospects' : 'Client';
-    const method = getSellsyMethod(company.catalog_names, false);
+    console.log('123',company)
+    // Ensure catalog_names is an array
+    const catalogNames = Array.isArray(company.catalog_names) ? company.catalog_names : [];
+
+    const entityType = catalogNames.includes("prospect") ? 'Prospects' : 'Client';
+    const method = getSellsyMethod(catalogNames, false);
 
     const requestSettings = {
         method: method,
@@ -771,24 +793,23 @@ async function createEntityInSellsy(company) {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
         });
-        
+
         let isMethod;
         if (method.includes("Prospects")) {
             isMethod = "prospect"
         } else {
             isMethod = "company"
         }
-        if (response.data.status === 'success') {
-            
 
+        if (response.data.status === 'success') {
             if (isMethod === "prospect") {
                 const sellsyId = response.data.response;  
-                await updateCompanyInCatalog(company.id, sellsyId, );
+                await updateCompanyInCatalog(company.id, sellsyId);
                 console.log('Prospect created successfully with id:', response.data.response);
                 return response.data.response;
             } else {
                 const sellsyId = response.data.response.client_id;  
-                await updateCompanyInCatalog(company.id, sellsyId, );
+                await updateCompanyInCatalog(company.id, sellsyId);
                 console.log('Company created successfully with id:', response.data.response.client_id);
                 return response.data.response.client_id;
             }

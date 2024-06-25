@@ -5,6 +5,7 @@ const catalogService = require('./services/catalogService');
 const cron = require('node-cron')
 const ekanRoutes = require('./routes/ekanRoutes');
 const catalogRoutes = require('./routes/catalogRoutes');
+const {syncStockLevels} = require('./services/catalogService')
 // const { syncProducts } = require('./services/sellsyService');
 
 app.use(express.json());
@@ -62,9 +63,12 @@ app.listen(port, () => {
 });
 
 
-registerWebhook()
-registerWebhookCompanies()
+//registerWebhook()
+//registerWebhookCompanies()
 // syncProducts();
+
+// cron job sync stocks 
+cron.schedule('0 */4 * * *', syncStockLevels); // Runs every 4 hours
 
 
 module.exports = app; // dev

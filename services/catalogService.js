@@ -1,5 +1,7 @@
 const axios = require('axios').default;
 const { setUpdatingCompany, getUpdatingCompany } = require('../helpers');
+const cron = require('node-cron');
+const { fetchStockFromEKan } = require('./ekanService'); // Adjust the path as necessary
 
 
 const startCatalogApi = axios.create({
@@ -63,6 +65,18 @@ const updateOrderInCatalog = async (orderId, sellsyOrderId) => {
     throw error;
   }
 };
+
+async function fetchCompanyFromCatalog(companyId) {
+  try {
+      const response = await startCatalogApi.get('/catalog/companies');
+      const companies = response.data.companies;
+      const company = companies.find(c => c.id === companyId);
+      return company;
+  } catch (error) {
+      console.error(`Error fetching company data from Catalog:`, error.response ? error.response.data : error.message);
+      throw error;
+  }
+}
 
 
 async function updateCompanyInCatalog(companyId, sellsyClientId) {
@@ -149,6 +163,62 @@ const createFulfillmentInCatalog = async (pendingOrder, trackingUrl, status) => 
   }
 };
 
+const createCanceledFulfillmentInCatalog = async (pendingOrder) => {
+  const catalogApiUrl = `/catalog/fulfillments`;
+  const fulfillment = {
+    fulfillments: [
+      {
+        order_id: pendingOrder.order_id,
+        status: 'canceled',
+        items: pendingOrder.items.map(item => ({
+          line_id: item.line_id || item.catalog_line_id,
+          quantity: item.quantity
+        }))
+      }
+    ]
+  };
+
+  try {
+    const response = await startCatalogApi.post(catalogApiUrl, fulfillment);
+    console.log('Canceled fulfillment created in Catalog:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to create canceled fulfillment in Catalog', error.response ? error.response.data : error.message);
+    throw new Error('Failed to create canceled fulfillment in Catalog');
+  }
+};
+
+const updateStockInCatalog = async (sku, stockLevel) => {
+  const catalogApiUrl = `/catalog/variants/${sku}`; 
+
+  const requestBody = {
+    stock_level: stockLevel,
+  };
+
+  try {
+    const response = await startCatalogApi.post(catalogApiUrl, requestBody);
+    console.log(`Stock updated in Catalog for SKU ${sku}:`, response.data);
+  } catch (error) {
+    console.error(`Error updating stock in Catalog for SKU ${sku}:`, error.response ? error.response.data : error.message);
+    throw error;
+  }
+};
+
+const syncStockLevels = async () => {
+  try {
+    const articles = await fetchStockFromEKan();
+    for (const article of articles) {
+      const sku = article.refEcommercant;
+      const stockLevel = article.stocks[0].stockDispo; 
+      await updateStockInCatalog(sku, stockLevel);
+    }
+    console.log('Stock levels synchronized successfully.');
+  } catch (error) {
+    console.error('Error synchronizing stock levels:', error);
+  }
+};
+
+
 
 
 // Fetch products from Catalog
@@ -177,6 +247,8 @@ module.exports = {
   updateCompanyInCatalog,
   updateOrderInCatalog,
   updateFulfillmentStatusInCatalog,
-  createFulfillmentInCatalog
+  createFulfillmentInCatalog,
+  fetchCompanyFromCatalog,
+  syncStockLevels,
   // fetchProductsFromCatalog
 };
