@@ -180,7 +180,7 @@ const createCanceledFulfillmentInCatalog = async (pendingOrder) => {
   const startCatalogApi = axios.create({
     baseURL: 'https://o91mts5a64.execute-api.eu-west-1.amazonaws.com/dev/', 
     headers: {
-      'X-API-KEY': process.env.STARTCATALOG_API_KEY,
+      'X-API-KEY': process.env.CATALOG_DEV_KEY,
       'Content-Type': 'application/json', 
       'accept':"application/json"
     }
@@ -234,27 +234,8 @@ const createEkanOrder = async (orderData) => {
 
 
 
-const fetchStockFromEKan = async () => {
-  const authHeader = Buffer.from(`${ekanCredentials.username}:${ekanCredentials.password}`).toString('base64');
-  
-  try {
-    const response = await axios.post('https://oms.ekan-democommercant.fr/api/ecomm/v1/articles/stockPositif', {
-      typeProduit: 'Article'
-    }, {
-      headers: {
-        'Authorization': `Basic ${authHeader}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    return response.data.articles;
-  } catch (error) {
-    console.error('Error fetching stock data from e-kan:', error.response ? error.response.data : error.message);
-    throw error;
-  }
-};
 
 module.exports = {
-  fetchStockFromEKan,
   createEkanOrder,
   mapCatalogOrderToEkanOrder, 
   checkParcelInEkan,

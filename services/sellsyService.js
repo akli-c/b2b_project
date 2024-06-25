@@ -1,6 +1,6 @@
 const axios = require('axios').default;
 const { formatDate } = require('../helpers')
-const { updateCompanyInCatalog, updateOrderInCatalog, updateFulfillmentStatusInCatalog, fetchCompanyFromCatalog } = require('./catalogService')
+const { updateCompanyInCatalog, updateOrderInCatalog, fetchCompanyFromCatalog } = require('./catalogService')
 const { setUpdatingCompany, getUpdatingCompany, setUpdatingOrder, getUpdatingOrder } = require('../helpers');
 const { createEkanOrder, isOrderShipped, checkParcelInEkan, pendingOrders, pendingShippedOrders } = require('./ekanService');
 
@@ -1046,7 +1046,9 @@ async function createContactInSellsy(isProspect, entityId, contact) {
             },
         });
         console.log('Contact created successfully:', response.data);
+        // voir ici
         return response.data.response.contact_id;
+
     } catch (error) {
         console.error('Error creating contact:', error);
         throw error;

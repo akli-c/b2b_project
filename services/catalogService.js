@@ -1,13 +1,16 @@
 const axios = require('axios').default;
 const { setUpdatingCompany, getUpdatingCompany } = require('../helpers');
 const cron = require('node-cron');
-const { fetchStockFromEKan } = require('./ekanService'); // Adjust the path as necessary
 
+const ekanCredentials = {
+  username: process.env.EKAN_MERCHANT_NUMBER,
+  password: process.env.EKAN_API_KEY
+};
 
 const startCatalogApi = axios.create({
   baseURL: 'https://o91mts5a64.execute-api.eu-west-1.amazonaws.com/dev/', 
   headers: {
-    'X-API-KEY': process.env.STARTCATALOG_API_KEY,
+    'X-API-KEY': process.env.CATALOG_DEV_KEY,
     'Content-Type': 'application/json', 
     'accept':"application/json"
   }
@@ -163,31 +166,6 @@ const createFulfillmentInCatalog = async (pendingOrder, trackingUrl, status) => 
   }
 };
 
-const createCanceledFulfillmentInCatalog = async (pendingOrder) => {
-  const catalogApiUrl = `/catalog/fulfillments`;
-  const fulfillment = {
-    fulfillments: [
-      {
-        order_id: pendingOrder.order_id,
-        status: 'canceled',
-        items: pendingOrder.items.map(item => ({
-          line_id: item.line_id || item.catalog_line_id,
-          quantity: item.quantity
-        }))
-      }
-    ]
-  };
-
-  try {
-    const response = await startCatalogApi.post(catalogApiUrl, fulfillment);
-    console.log('Canceled fulfillment created in Catalog:', response.data);
-    return response.data;
-  } catch (error) {
-    console.error('Failed to create canceled fulfillment in Catalog', error.response ? error.response.data : error.message);
-    throw new Error('Failed to create canceled fulfillment in Catalog');
-  }
-};
-
 const updateStockInCatalog = async (sku, stockLevel) => {
   const catalogApiUrl = `/catalog/variants/${sku}`; 
 
@@ -218,6 +196,24 @@ const syncStockLevels = async () => {
   }
 };
 
+const fetchStockFromEKan = async () => {
+  const authHeader = Buffer.from(`${ekanCredentials.username}:${ekanCredentials.password}`).toString('base64');
+  
+  try {
+    const response = await axios.post('https://oms.ekan-democommercant.fr/api/ecomm/v1/articles/stockPositif', {
+      typeProduit: 'Article'
+    }, {
+      headers: {
+        'Authorization': `Basic ${authHeader}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data.articles;
+  } catch (error) {
+    console.error('Error fetching stock data from e-kan:', error.response ? error.response.data : error.message);
+    throw error;
+  }
+};
 
 
 

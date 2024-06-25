@@ -25,7 +25,7 @@ if (process.env.NODE_ENV == "development") {
 const registerWebhook = async () => {
   console.log("url",url)
     const webhookUrl = `${url}/catalog/webhook`; 
-    const apiKey = process.env.STARTCATALOG_API_KEY; 
+    const apiKey = process.env.CATALOG_DEV_KEY; 
     try {
       await catalogService.registerWebhook(webhookUrl, apiKey);
       console.log('Webhook for orders registered successfully', webhookUrl);
@@ -36,7 +36,7 @@ const registerWebhook = async () => {
 
 const registerWebhookCompanies = async () => {
   const webhookUrl = `${url}/catalog/companies`; 
-  const apiKey = process.env.STARTCATALOG_API_KEY; 
+  const apiKey = process.env.CATALOG_DEV_KEY; 
   try {
     await catalogService.registerWebhookCompanies(webhookUrl, apiKey);
     console.log('Webhook for companies registered successfully', webhookUrl);
