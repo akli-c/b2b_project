@@ -63,8 +63,8 @@ app.listen(port, () => {
 });
 
 
-registerWebhook()
-registerWebhookCompanies()
+//registerWebhook()
+//registerWebhookCompanies()
 // syncProducts();
 
 // cron job sync stocks 

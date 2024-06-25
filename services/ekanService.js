@@ -49,7 +49,7 @@ const isOrderShipped = (ekanOrderData) => {
 };  
 
 // Cron job to check the status of pending orders in Ekan
-cron.schedule('*/50 * * * *', async () => { // every 5 min
+cron.schedule('0 * * * *', async () => { // every 5 min
   console.log('Running cron job to check pending orders in E-Kan', pendingOrders);
   
   for (let i = 0; i < pendingOrders.length; i++) {
@@ -80,7 +80,7 @@ cron.schedule('*/50 * * * *', async () => { // every 5 min
 });
 
 // Cron job to check the status of pending shipped orders in Ekan
-cron.schedule('*/50 * * * *', async () => { //5 min
+cron.schedule('0 * * * *', async () => { //50 min
   console.log('Running cron job to check pending shipped orders in E-Kan', pendingShippedOrders);
 
   for (let i = 0; i < pendingShippedOrders.length; i++) {
